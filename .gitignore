@@ -1,0 +1,8 @@
+/_output/
+/.quarto/
+/slides_files/
+*.html
+!/index.html
+.DS_Store
+
+**/*.quarto_ipynb

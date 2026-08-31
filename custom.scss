@@ -1,0 +1,52 @@
+/*-- scss:defaults --*/
+
+// Fonts
+$font-family-sans-serif: "Inter", "Helvetica Neue", Arial, sans-serif !default;
+$presentation-heading-font: "Inter", "Helvetica Neue", Arial, sans-serif !default;
+
+// Colors — deep indigo / NumPy-ish blue accents
+$body-bg: #101322 !default;
+$body-color: #e8eaf2 !default;
+$link-color: #5aa9ff !default;
+$selection-bg: #4361ee !default;
+
+$presentation-heading-color: #ffffff !default;
+$code-block-bg: #0b1021 !default;
+
+/*-- scss:rules --*/
+
+.reveal .slides section {
+  text-align: left;
+}
+
+.reveal h1, .reveal h2, .reveal h3 {
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+.reveal .footer {
+  color: #8a90a6;
+  font-size: 0.5em;
+}
+
+.reveal blockquote {
+  border-left: 4px solid #5aa9ff;
+  background: rgba(90, 169, 255, 0.08);
+  padding: 0.5em 1em;
+  font-style: normal;
+}
+
+.reveal table {
+  font-size: 0.9em;
+}
+
+.reveal pre code {
+  border-radius: 8px;
+  padding: 0.8em 1em;
+}
+
+// Accent for the title slide
+#title-slide .subtitle {
+  color: #5aa9ff;
+  font-style: italic;
+}

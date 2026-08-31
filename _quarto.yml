@@ -1,0 +1,3 @@
+project:
+  title: "How NumPy Divides Integers Really Fast"
+  output-dir: _output

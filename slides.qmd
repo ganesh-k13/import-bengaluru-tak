@@ -1,0 +1,259 @@
+---
+title: "How NumPy Divides Integers Really Fast"
+subtitle: "…and the bugs I caused doing it"
+author: "Ganesh Kathiresan"
+date: "2026-09-06"
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    slide-number: c/t
+    show-slide-number: all
+    controls: true
+    progress: true
+    transition: slide
+    incremental: false
+    highlight-style: github
+    code-line-numbers: true
+    center-title-slide: true
+    footer: "import_ bengaluru · BangPypers"
+    logo: ""
+    hash: true
+---
+
+## Hi, I'm Ganesh 👋 {.smaller}
+
+- Software engineer, open-source contributor to **NumPy** since 2020
+- I work deep in the internals: **SIMD integer division**, new UFuncs
+  (`bit_count`, `bitwise_count`), the **Meson** build migration, and the
+  `spin` developer tooling
+- I like the unglamorous side of open source: benchmarks, regressions,
+  and the occasional 2 AM "why is CI red on ARM only?"
+
+::: {.notes}
+Keep this short — 30 seconds. Land the hook: I work on the thing everyone
+imports but nobody looks inside.
+:::
+
+## The library everyone imports, nobody opens {background-color="#0b1021"}
+
+Pandas, PyTorch, scikit-learn, JAX, every dataframe and ML stack…
+
+. . .
+
+They all bottom out in **NumPy**.
+
+. . .
+
+So let's look at something completely ordinary:
+
+```python
+a // b   # integer floor division on an array
+```
+
+. . .
+
+What actually happens here? It's weirder — and faster — than you'd think.
+
+# Part 1 — Why is `a // b` slow? {background-color="#1a1a2e"}
+
+## Division is the slow arithmetic {.smaller}
+
+Not all CPU instructions cost the same. Rough latencies on a modern x86 core:
+
+| Operation | Approx. latency (cycles) |
+|-----------|--------------------------:|
+| add / sub | ~1 |
+| multiply  | ~3 |
+| **integer divide** | **~20–90** |
+
+. . .
+
+Multiply is cheap. **Divide is the expensive one nobody thinks about.**
+
+. . .
+
+And in NumPy you rarely divide *once* — you divide across a whole array,
+millions of times. That cost is multiplied.
+
+::: {.notes}
+Exact numbers vary by microarchitecture; the point is the order-of-magnitude
+gap between divide and everything else.
+:::
+
+## The key idea
+
+> You can replace **division by a constant** with a **multiply and a shift**.
+
+. . .
+
+Dividing by 7? A compiler doesn't emit a `div`. It multiplies by a cleverly
+chosen "magic number" and shifts:
+
+```c
+// x / 7  becomes roughly:
+q = (x * 0x2492_4925ULL) >> 34;   // magic constant + shift
+```
+
+. . .
+
+This is the trick behind **`libdivide`** — and the foundation of everything
+that follows.
+
+# Part 2 — The multiply-and-shift trick {background-color="#16213e"}
+
+## Bringing libdivide into NumPy {.smaller}
+
+The catch: in an array op like `a // b`, the divisor `b` is often the **same
+value repeated**. Compute the magic number **once**, reuse it across the array.
+
+```c
+// Precompute once per divisor
+struct libdivide_s64_t d = libdivide_s64_gen(divisor);
+
+// Then, for every element — no hardware divide!
+for (i = 0; i < n; i++) {
+    out[i] = libdivide_s64_do(a[i], &d);
+}
+```
+
+. . .
+
+**PR #17727** — added libdivide to floor division. First real speedup.
+
+. . .
+
+We also had to get **floor** semantics right: Python's `//` rounds toward
+**negative infinity**, C's `/` truncates toward **zero**. `-7 // 2 == -4`,
+not `-3`.
+
+::: {.notes}
+This floor-vs-truncate detail is exactly the kind of thing that bites you
+later. Foreshadow the bug.
+:::
+
+# Part 3 — Going SIMD, portably {background-color="#0f3460"}
+
+## One divide at a time is still one at a time {.smaller}
+
+libdivide removed the hardware `div`. But we still process **one element per
+loop iteration**.
+
+. . .
+
+**SIMD** — Single Instruction, Multiple Data — does 4, 8, 16 elements *at once*:
+
+```text
+scalar:   [a0] / d  →  [a1] / d  →  [a2] / d  →  [a3] / d
+SIMD:     [a0 a1 a2 a3] / d   →   all four, one instruction
+```
+
+. . .
+
+But which instruction? AVX2? AVX-512? ARM NEON? They're all different.
+
+## Universal intrinsics: write once, run fast everywhere {.smaller}
+
+NumPy has its own SIMD abstraction layer. You write **one** loop against
+generic intrinsics; NumPy compiles specialized versions per architecture and
+picks the best one **at runtime**.
+
+```c
+// One source, ~generic intrinsics
+npyv_s32 a = npyv_load_s32(src);
+npyv_s32 q = npyv_divc_s32(a, divisor);   // vectorized divide-by-constant
+npyv_store_s32(dst, q);
+```
+
+. . .
+
+- **PR #18075** — SIMD dispatch for **unsigned** floor division
+- **PR #18766** — **signed** integer division via universal intrinsics
+
+. . .
+
+Signed is the hard one: sign handling + floor rounding, all vectorized.
+
+## The payoff {.smaller}
+
+::: {.r-stack}
+![Benchmark: speedup from libdivide + SIMD across integer dtypes](images/benchmark.png){width="70%"}
+:::
+
+::: {.fragment}
+Big speedups on `int8`…`int64`, on both Intel/AMD and ARM — **from one
+codebase**.
+:::
+
+::: {.notes}
+Replace images/benchmark.png with the real chart from PR #17727 / #18075.
+If you don't have it rendered, screenshot the PR's benchmark image.
+Say the actual numbers out loud here.
+:::
+
+# Part 4 — The bug I shipped 😬 {background-color="#3a0ca3"}
+
+## Fast code that's wrong isn't fast {.smaller}
+
+Vectorizing signed division reorganized how the ufunc loops were generated.
+
+. . .
+
+**PR #18751 — a regression.** The floor-division ufunc loop generation order
+was wrong. It shipped.
+
+. . .
+
+To *millions* of users. `a // b` could return the wrong result for certain
+type combinations.
+
+. . .
+
+> The part most performance talks skip: sometimes you're the one who broke it.
+
+## What broke, and why it slipped through {.smaller}
+
+- The optimization touched **loop generation order** — subtle, not the math
+  itself
+- Test matrix didn't cover the exact dtype combination that regressed
+- Then the honest work: reproduce → minimal case → fix → **add the missing
+  test** so it can never come back
+
+. . .
+
+There was also a whole separate saga:
+
+- `INT_MIN // -1` **overflows** — the true result doesn't fit in the type
+- What should NumPy even *do*? → **PRs #21507, #21727** — report the overflow
+  gracefully instead of crashing/UB
+
+::: {.notes}
+The INT_MIN/-1 case is a great "edge cases are the real work" beat.
+abs(INT_MIN) doesn't fit in an int — the classic overflow.
+:::
+
+# Part 5 — What I'd want you to take away {background-color="#1a1a2e"}
+
+## Takeaways {.smaller}
+
+::: {.incremental}
+1. **Division is expensive** — and multiply-and-shift is a beautiful way to
+   dodge it
+2. **SIMD portability is real** — universal intrinsics let one codebase go
+   fast on Intel, AMD, and ARM
+3. **Real OSS performance work** = benchmarks + review + mistakes + recovery,
+   not just clever code
+4. The code under your `import` is **approachable**. You can contribute to it.
+:::
+
+## Thank you 🙏 {background-color="#0b1021"}
+
+**How NumPy Divides Integers Really Fast**
+
+- The PRs behind this talk:
+  `#17727 · #18075 · #18766 · #18751 · #19135 · #21507 · #21727`
+- GitHub: **@ganesh-k13**
+- Questions?
+
+::: {.notes}
+Leave the PR numbers up during Q&A — people love to go read the actual diffs.
+:::
