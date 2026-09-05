@@ -180,6 +180,37 @@ npyv_store_s32(dst, q);
 
 Signed is the hard one: sign handling + floor rounding, all vectorized.
 
+## Which instruction runs *here*? {.smaller}
+
+NumPy tells you what it compiled and what it picked at runtime for **your** CPU:
+
+```{pyodide}
+import numpy as np
+from numpy._core._multiarray_umath import (
+    __cpu_baseline__ as baseline,   # always-on, compiled in
+    __cpu_dispatch__ as dispatch,   # candidates chosen at runtime
+    __cpu_features__ as features,   # what THIS cpu actually has
+)
+baseline, [f for f in dispatch if features[f]]
+```
+
+::: {.callout-note}
+Live here it runs in a **WASM sandbox** (Pyodide) — so you'll see the browser's
+feature set, not real silicon. On my laptop (Apple Silicon), the same call says:
+:::
+
+```python
+# baseline : ['NEON', 'NEON_FP16', 'NEON_VFPV4', 'ASIMD']
+# dispatch chosen at runtime → ['ASIMDHP', 'ASIMDDP']
+np.show_runtime()   # full report, incl. simd_extensions found / not_found
+```
+
+::: {.notes}
+Run np.show_runtime() from a REAL terminal on the presenting laptop live if
+you can — that's the money shot. show_runtime() is itself my PR #21468.
+On an x86 box this would show SSE/AVX2/AVX-512 instead of NEON/ASIMD.
+:::
+
 ## The payoff {.smaller}
 
 ::: {.r-stack}
