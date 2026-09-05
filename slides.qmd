@@ -4,7 +4,7 @@ subtitle: "…and the bugs I caused doing it"
 author: "Ganesh Kathiresan"
 date: "2026-09-06"
 format:
-  revealjs:
+  live-revealjs:
     theme: [default, custom.scss]
     slide-number: c/t
     show-slide-number: all
@@ -18,6 +18,8 @@ format:
     footer: "import_bengaluru · BangPypers"
     logo: ""
     hash: true
+filters:
+  - live
 ---
 
 ## Hi, I'm Ganesh 👋 {.smaller}
@@ -44,13 +46,15 @@ They all bottom out in **NumPy**.
 
 So let's look at something completely ordinary:
 
-```python
-a // b   # integer floor division on an array
+```{pyodide}
+import numpy as np
+a = np.array([10, 20, 30, 40])
+a // 3          # integer floor division on an array
 ```
 
 . . .
 
-What actually happens here? It's weirder - and faster - than you'd think.
+What actually happens under this? It's weirder - and faster - than you'd think.
 
 # Part 1 — Why is `a // b` slow? {background-color="#1a1a2e"}
 
@@ -121,12 +125,17 @@ for (i = 0; i < n; i++) {
 . . .
 
 We also had to get **floor** semantics right: Python's `//` rounds toward
-**negative infinity**, C's `/` truncates toward **zero**. `-7 // 2 == -4`,
-not `-3`.
+**negative infinity**, C's `/` truncates toward **zero**.
+
+```{pyodide}
+import numpy as np
+# NumPy matches Python's floor semantics, not C's truncation:
+np.array([-7]) // 2, -7 // 2, int(-7 / 2)   # -4, -4, -3
+```
 
 ::: {.notes}
 This floor-vs-truncate detail is exactly the kind of thing that bites you
-later. Foreshadow the bug.
+later. Foreshadow the bug. Run the cell live so the -4 vs -3 lands.
 :::
 
 # Part 3 — Going SIMD, portably {background-color="#0f3460"}
@@ -223,6 +232,13 @@ There was also a whole separate saga:
 - `INT_MIN // -1` **overflows** — the true result doesn't fit in the type
 - What should NumPy even *do*? → **PRs #21507, #21727** — report the overflow
   gracefully instead of crashing/UB
+
+```{pyodide}
+import numpy as np
+imin = np.iinfo(np.int64).min          # -9223372036854775808
+# abs(imin) can't fit in int64 -> NumPy warns instead of silent UB
+np.array([imin], dtype=np.int64) // np.int64(-1)
+```
 
 ::: {.notes}
 The INT_MIN/-1 case is a great "edge cases are the real work" beat.
