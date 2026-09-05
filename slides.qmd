@@ -229,50 +229,76 @@ Say the actual numbers out loud here.
 
 # Part 4 — The bug I shipped 😬 {background-color="#3a0ca3"}
 
+## A ufunc is a *table*, tried in order {.smaller}
+
+`floor_divide` isn't one function — it's an **ordered list of typed loops**,
+one per dtype. When you write `a // b`, NumPy scans this list **top-to-bottom**
+and runs the **first loop your inputs fit into**:
+
+```{pyodide}
+import numpy as np
+np.floor_divide.types   # 'in in -> out' — note bb->b (signed) before BB->B (unsigned)
+```
+
+. . .
+
+The rule: for each width, the **signed** loop must be listed **before** the
+**unsigned** one (`bb->b` before `BB->B`, `ll->l` before `LL->L`, …).
+
+. . .
+
+My SIMD change **(#18075)** accidentally emitted the **unsigned loops first**.
+
 ## Fast code that's wrong isn't fast {.smaller}
 
-Vectorizing signed division reorganized how the ufunc loops were generated.
+With unsigned listed first, some inputs matched an **unsigned** loop when they
+should have hit the **signed** one — and reinterpreting signed bits as unsigned
+turns small negatives into huge positives:
+
+```{pyodide}
+import numpy as np
+# This is *why* loop order matters — a signed value seen as unsigned:
+np.array([-6], dtype=np.int64).view(np.uint64)   # 18446744073709551610
+```
 
 . . .
 
-**PR #18751 — a regression.** The floor-division ufunc loop generation order
-was wrong. It shipped.
+So `a // b` came back **silently wrong** for certain type combos — fast,
+vectorized, SIMD-accelerated, and incorrect. Shipped to *millions*. 😬
 
 . . .
 
-To *millions* of users. `a // b` could return the wrong result for certain
-type combinations.
-
-. . .
+Caught **downstream by pandas** (pandas#40874), *not* by our own tests.
 
 > The part most performance talks skip: sometimes you're the one who broke it.
 
-## What broke, and why it slipped through {.smaller}
+## The fix, and closing the gap {.smaller}
 
-- The optimization touched **loop generation order** — subtle, not the math
-  itself
-- Test matrix didn't cover the exact dtype combination that regressed
-- Then the honest work: reproduce → minimal case → fix → **add the missing
-  test** so it can never come back
+**PR #18751** — one-line reorder: put signed back before unsigned in
+`generate_umath.py`.
 
 . . .
 
-There was also a whole separate saga:
+The real fix was the **test**: assert signed-before-unsigned for *every* ufunc,
+so this class of bug can never silently return.
 
-- `INT_MIN // -1` **overflows** — the true result doesn't fit in the type
-- What should NumPy even *do*? → **PRs #21507, #21727** — report the overflow
-  gracefully instead of crashing/UB
+. . .
+
+A separate edge-case saga from the same area — `INT_MIN // -1` **overflows**
+(the true answer doesn't fit in the type). What should NumPy do? → **#21507,
+#21727** report it gracefully instead of silent UB:
 
 ```{pyodide}
 import numpy as np
 imin = np.iinfo(np.int64).min          # -9223372036854775808
-# abs(imin) can't fit in int64 -> NumPy warns instead of silent UB
-np.array([imin], dtype=np.int64) // np.int64(-1)
+np.array([imin], dtype=np.int64) // np.int64(-1)   # warns: overflow
 ```
 
 ::: {.notes}
-The INT_MIN/-1 case is a great "edge cases are the real work" beat.
-abs(INT_MIN) doesn't fit in an int — the classic overflow.
+Loop table: `np.floor_divide.types`. Casting rules mean the resolver can land on
+the wrong loop if unsigned precedes signed. The .view() cell shows the hazard of
+signed->unsigned reinterpretation (illustrative, not the literal buggy output).
+INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 :::
 
 # Part 5 — What I'd want you to take away {background-color="#1a1a2e"}
