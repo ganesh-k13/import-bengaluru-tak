@@ -102,13 +102,20 @@ np.array_equal(fast, slow), magic   # same answer, no `div` instruction
 
 . . .
 
-This is the trick behind **`libdivide`** - and the foundation of everything
-that follows.
+The formal name: **"division by invariant integers using multiplication"**
+(Granlund & Montgomery, 1994) — the trick behind **`libdivide`**.
 
 ::: {.notes}
-Point out: magic is computed ONCE, then reused for every element — that's the
-whole game. The exact constant/shift depends on the divisor and bit width;
-libdivide picks correct ones for the full integer range (this demo is bounded).
+Magic is computed ONCE, then reused for every element — that's the whole game.
+The exact constant/shift depends on divisor + bit width; libdivide picks correct
+ones for the full integer range (this demo is bounded).
+
+Full refs:
+- Granlund & Montgomery, "Division by Invariant Integers using Multiplication",
+  PLDI 1994 — the foundational paper.
+- Arch D. Robison, "N-Bit Unsigned Division via N-Bit Multiply-Add", 2005 —
+  the unsigned round-up variant libdivide uses.
+- Also covered in Warren, "Hacker's Delight", ch. 10.
 :::
 
 # Part 2 — The multiply-and-shift trick {background-color="#16213e"}
