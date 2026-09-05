@@ -315,6 +315,35 @@ signed->unsigned reinterpretation (illustrative, not the literal buggy output).
 INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 :::
 
+# Epilogue — six years later {background-color="#0b1021"}
+
+## Full circle: the libdivide odyssey {.smaller}
+
+- **2020/21** — libdivide arrives to speed up integer division
+  ([#17727](https://github.com/numpy/numpy/pull/17727))
+- **2022** — `floor_divide` moves to SIMD ([#18766](https://github.com/numpy/numpy/pull/18766)) …
+  but **one** path stays stuck on libdivide: `timedelta`
+- **2026** — that last path finally goes SIMD too — `timedelta` `floor_divide`
+  **~5–6× faster** ([#32422](https://github.com/numpy/numpy/pull/32422)) …
+- **2026** — …so the vendored libdivide can be **deleted entirely**: −2,112 lines
+  ([#32498](https://github.com/numpy/numpy/pull/32498))
+
+. . .
+
+::: {.r-stack}
+![The maintainer merging the final PR](screenshot_1.png){width="85%"}
+:::
+
+. . .
+
+Six years, start to finish. **That's open source.** 🥳
+
+::: {.notes}
+The punchline: I opened #32422 by feeding my own 3-year-old abandoned commit to
+Claude to finish it. The whole thing began before the AI boom and closed with AI
+help. "libdivide odyssey" is the maintainer's own words — let it land.
+:::
+
 # Part 5 — What I'd want you to take away {background-color="#1a1a2e"}
 
 ## Takeaways {.smaller}
@@ -340,7 +369,9 @@ INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
   [#18751](https://github.com/numpy/numpy/pull/18751) ·
   [#19135](https://github.com/numpy/numpy/pull/19135) ·
   [#21507](https://github.com/numpy/numpy/pull/21507) ·
-  [#21727](https://github.com/numpy/numpy/pull/21727)
+  [#21727](https://github.com/numpy/numpy/pull/21727) ·
+  [#32422](https://github.com/numpy/numpy/pull/32422) ·
+  [#32498](https://github.com/numpy/numpy/pull/32498)
 - GitHub: **@ganesh-k13**
 - Questions?
 
