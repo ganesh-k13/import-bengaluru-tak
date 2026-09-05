@@ -60,26 +60,23 @@ What actually happens under this? It's weirder - and faster - than you'd think.
 
 ## Division is the slow arithmetic {.smaller}
 
-Not all CPU instructions cost the same. Rough latencies on a modern x86 core:
+Rough latencies on a modern x86 core:
 
-| Operation | Approx. latency (cycles) |
-|-----------|--------------------------:|
+| Operation | Latency (cycles) |
+|-----------|------------------:|
 | add / sub | ~1 |
 | multiply  | ~3 |
 | **integer divide** | **~20–90** |
 
 . . .
 
-Multiply is cheap. **Divide is the expensive one nobody thinks about.**
-
-. . .
-
-And in NumPy you rarely divide *once* — you divide across a whole array,
-millions of times. That cost is multiplied.
+**Divide is the expensive one nobody thinks about** — and NumPy does it across
+a whole array, millions of times.
 
 ::: {.notes}
-Exact numbers vary by microarchitecture; the point is the order-of-magnitude
-gap between divide and everything else.
+Not all instructions cost the same. Numbers vary by microarchitecture; the point
+is the order-of-magnitude gap between divide and everything else. And you never
+divide once — the cost is multiplied across the array.
 :::
 
 ## The key idea
@@ -118,37 +115,29 @@ libdivide picks correct ones for the full integer range (this demo is bounded).
 
 ## Bringing libdivide into NumPy {.smaller}
 
-The catch: in an array op like `a // b`, the divisor `b` is often the **same
-value repeated**. Compute the magic number **once**, reuse it across the array.
+Same divisor across the array → compute the magic number **once**, reuse it.
 
 ```c
-// Precompute once per divisor
-struct libdivide_s64_t d = libdivide_s64_gen(divisor);
-
-// Then, for every element — no hardware divide!
-for (i = 0; i < n; i++) {
-    out[i] = libdivide_s64_do(a[i], &d);
-}
+struct libdivide_s64_t d = libdivide_s64_gen(divisor);   // once
+for (i = 0; i < n; i++)
+    out[i] = libdivide_s64_do(a[i], &d);                 // no hardware divide
 ```
 
-. . .
-
-**PR [#17727](https://github.com/numpy/numpy/pull/17727)** - added libdivide to floor division. First real speedup.
+**PR [#17727](https://github.com/numpy/numpy/pull/17727)** — libdivide in floor division. First real speedup.
 
 . . .
 
-We also had to get **floor** semantics right: Python's `//` rounds toward
-**negative infinity**, C's `/` truncates toward **zero**.
+But `//` must **floor** (toward −∞), not truncate like C (toward 0):
 
 ```{pyodide}
 import numpy as np
-# NumPy matches Python's floor semantics, not C's truncation:
 np.array([-7]) // 2, -7 // 2, int(-7 / 2)   # -4, -4, -3
 ```
 
 ::: {.notes}
-This floor-vs-truncate detail is exactly the kind of thing that bites you
-later. Foreshadow the bug. Run the cell live so the -4 vs -3 lands.
+The divisor is often the same value repeated — that's what makes precompute-once
+pay off. Floor-vs-truncate is exactly the kind of detail that bites you later —
+foreshadow the bug. Run the cell live so the -4 vs -3 lands.
 :::
 
 # Part 3 — Going SIMD, portably {background-color="#0f3460"}
@@ -173,12 +162,10 @@ But which instruction? AVX2? AVX-512? ARM NEON? They're all different.
 
 ## Universal intrinsics: write once, run fast everywhere {.smaller}
 
-NumPy has its own SIMD abstraction layer. You write **one** loop against
-generic intrinsics; NumPy compiles specialized versions per architecture and
-picks the best one **at runtime**.
+Write **one** loop against generic intrinsics → NumPy builds a version per
+architecture and picks the best **at runtime**.
 
 ```c
-// One source, ~generic intrinsics
 npyv_s32 a = npyv_load_s32(src);
 npyv_s32 q = npyv_divc_s32(a, divisor);   // vectorized divide-by-constant
 npyv_store_s32(dst, q);
@@ -186,34 +173,31 @@ npyv_store_s32(dst, q);
 
 . . .
 
-- **PR [#18075](https://github.com/numpy/numpy/pull/18075)** — SIMD dispatch for **unsigned** floor division
-- **PR [#18766](https://github.com/numpy/numpy/pull/18766)** — **signed** integer division via universal intrinsics
+- **[#18075](https://github.com/numpy/numpy/pull/18075)** — **unsigned** floor division
+- **[#18766](https://github.com/numpy/numpy/pull/18766)** — **signed** (the hard one: sign + floor, all vectorized)
 
-. . .
-
-Signed is the hard one: sign handling + floor rounding, all vectorized.
+::: {.notes}
+NumPy has its own SIMD abstraction layer — one source, compiled specialized per
+arch. Signed is hard because you handle sign and floor rounding in vectors.
+:::
 
 ## Which instruction runs *here*? {.smaller}
 
-NumPy will tell you, **per ufunc and per dtype**, which SIMD variant it built
-and which it picked at runtime — let's ask about `floor_divide` itself:
+NumPy tells you, **per ufunc + dtype**, what it built and what it picked:
 
 ```{pyodide}
 import numpy as np
-# 'l' = the int64 loop ('lll' = int64 // int64 -> int64)
 np.lib.introspect.opt_func_info(func_name="floor_divide", signature="l")
 ```
 
 ::: {.callout-note}
-Live here it runs in a **WASM sandbox** (Pyodide), so it reports the browser's
-build. On my laptop (Apple Silicon) the same call returns:
+Live = WASM sandbox. On my Apple Silicon laptop it returns:
 :::
 
 ```python
-{'floor_divide': {'lll': {'available': 'baseline(NEON NEON_FP16 ... ASIMD)',
-                          'current':   'baseline(NEON NEON_FP16 ... ASIMD)'}}}
-# On an x86 box you'd instead see 'available': 'SSE41 ... AVX2 AVX512...'
-# and 'current' set to whichever your CPU supports.
+{'floor_divide': {'lll': {'available': 'baseline(NEON ... ASIMD)',
+                          'current':   'baseline(NEON ... ASIMD)'}}}
+# x86 would show 'AVX2 AVX512...' instead
 ```
 
 ::: {.notes}
@@ -244,74 +228,65 @@ Say the actual numbers out loud here.
 
 ## A ufunc is a *table*, tried in order {.smaller}
 
-`floor_divide` isn't one function — it's an **ordered list of typed loops**,
-one per dtype. When you write `a // b`, NumPy scans this list **top-to-bottom**
-and runs the **first loop your inputs fit into**:
+`floor_divide` is an **ordered list of typed loops** — NumPy runs the first one
+your inputs fit into:
 
 ```{pyodide}
 import numpy as np
-np.floor_divide.types   # 'in in -> out' — note bb->b (signed) before BB->B (unsigned)
+np.floor_divide.types   # signed 'bb->b' must come before unsigned 'BB->B'
 ```
 
 . . .
 
-The rule: for each width, the **signed** loop must be listed **before** the
-**unsigned** one (`bb->b` before `BB->B`, `ll->l` before `LL->L`, …).
+The rule: **signed before unsigned** for each width.
 
 . . .
 
-My SIMD change **([#18075](https://github.com/numpy/numpy/pull/18075))** accidentally emitted the **unsigned loops first**.
+My SIMD change **([#18075](https://github.com/numpy/numpy/pull/18075))** emitted **unsigned first**.
+
+::: {.notes}
+NumPy scans the table top-to-bottom. Rule holds per width: bb->b before BB->B,
+ll->l before LL->L, and so on.
+:::
 
 ## Fast code that's wrong isn't fast {.smaller}
 
-With unsigned listed first, some inputs matched an **unsigned** loop when they
-should have hit the **signed** one — and reinterpreting signed bits as unsigned
-turns small negatives into huge positives:
+Signed data hitting an unsigned loop = same bits, read wrong → small negatives
+become huge positives:
 
 ```{pyodide}
 import numpy as np
-# This is *why* loop order matters — the same 8 bits, read two ways:
-np.array([-6], dtype=np.int8).view(np.uint8)   # -6  ->  250  (256 - 6)
+np.array([-6], dtype=np.int8).view(np.uint8)   # -6 -> 250
 ```
 
 . . .
 
-So `a // b` came back **silently wrong** for certain type combos — fast,
-vectorized, SIMD-accelerated, and incorrect. Shipped to *millions*. 😬
+`a // b` came back **silently wrong** — fast, vectorized, and incorrect.
+Shipped to *millions*. 😬 Caught by **pandas**
+([pandas#40874](https://github.com/pandas-dev/pandas/issues/40874)), not our tests.
 
-. . .
-
-Caught **downstream by pandas** ([pandas#40874](https://github.com/pandas-dev/pandas/issues/40874)), *not* by our own tests.
-
-> The part most performance talks skip: sometimes you're the one who broke it.
+> Sometimes you're the one who broke it.
 
 ## The fix, and closing the gap {.smaller}
 
-**PR [#18751](https://github.com/numpy/numpy/pull/18751)** — one-line reorder: put signed back before unsigned in
-`generate_umath.py`.
+**[#18751](https://github.com/numpy/numpy/pull/18751)** — a one-line reorder. The *real* fix: a **test**
+asserting signed-before-unsigned for every ufunc.
 
 . . .
 
-The real fix was the **test**: assert signed-before-unsigned for *every* ufunc,
-so this class of bug can never silently return.
-
-. . .
-
-A separate edge-case saga from the same area — `INT_MIN // -1` **overflows**
-(the true answer doesn't fit in the type). What should NumPy do? →
-**[#21507](https://github.com/numpy/numpy/pull/21507),
-[#21727](https://github.com/numpy/numpy/pull/21727)** report it gracefully instead of silent UB:
+Related edge case — `INT_MIN // -1` **overflows** (won't fit the type).
+**[#21507](https://github.com/numpy/numpy/pull/21507) ·
+[#21727](https://github.com/numpy/numpy/pull/21727)** warn instead of silent UB:
 
 ```{pyodide}
 import numpy as np
-imin = np.iinfo(np.int64).min          # -9223372036854775808
+imin = np.iinfo(np.int64).min
 np.array([imin], dtype=np.int64) // np.int64(-1)   # warns: overflow
 ```
 
 ::: {.notes}
-Loop table: `np.floor_divide.types`. Casting rules mean the resolver can land on
-the wrong loop if unsigned precedes signed. The .view() cell shows the hazard of
-signed->unsigned reinterpretation (illustrative, not the literal buggy output).
+The reorder was in generate_umath.py. The .view() cell earlier showed the hazard
+of signed->unsigned reinterpretation (illustrative, not the literal buggy output).
 INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 :::
 
@@ -319,29 +294,24 @@ INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 
 ## Full circle: the libdivide odyssey {.smaller}
 
-- **2020/21** — libdivide arrives to speed up integer division
-  ([#17727](https://github.com/numpy/numpy/pull/17727))
-- **2022** — `floor_divide` moves to SIMD ([#18766](https://github.com/numpy/numpy/pull/18766)) …
-  but **one** path stays stuck on libdivide: `timedelta`
-- **2026** — that last path finally goes SIMD too — `timedelta` `floor_divide`
-  **~5–6× faster** ([#32422](https://github.com/numpy/numpy/pull/32422)) …
-- **2026** — …so the vendored libdivide can be **deleted entirely**: −2,112 lines
-  ([#32498](https://github.com/numpy/numpy/pull/32498))
+- **2021** — libdivide arrives ([#17727](https://github.com/numpy/numpy/pull/17727))
+- **2022** — `floor_divide` → SIMD ([#18766](https://github.com/numpy/numpy/pull/18766)); `timedelta` stays on libdivide
+- **2026** — last path → SIMD, **~5–6× faster** ([#32422](https://github.com/numpy/numpy/pull/32422))
+- **2026** — libdivide **deleted**: −2,112 lines ([#32498](https://github.com/numpy/numpy/pull/32498))
 
 . . .
 
-::: {.r-stack}
-![The maintainer merging the final PR](screenshot_1.png){width="85%"}
-:::
+![](screenshot_1.png){width="80%"}
 
 . . .
 
 Six years, start to finish. **That's open source.** 🥳
 
 ::: {.notes}
-The punchline: I opened #32422 by feeding my own 3-year-old abandoned commit to
-Claude to finish it. The whole thing began before the AI boom and closed with AI
-help. "libdivide odyssey" is the maintainer's own words — let it land.
+One path (timedelta) stayed stuck on libdivide until 2026. Punchline: I finished
+#32422 by feeding my own 3-year-old abandoned commit to Claude — the journey
+began before the AI boom and closed with AI help. "libdivide odyssey" is the
+maintainer's own words — let it land.
 :::
 
 # Part 5 — What I'd want you to take away {background-color="#1a1a2e"}
