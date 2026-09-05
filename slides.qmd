@@ -133,7 +133,7 @@ for (i = 0; i < n; i++) {
 
 . . .
 
-**PR #17727** - added libdivide to floor division. First real speedup.
+**PR [#17727](https://github.com/numpy/numpy/pull/17727)** - added libdivide to floor division. First real speedup.
 
 . . .
 
@@ -186,8 +186,8 @@ npyv_store_s32(dst, q);
 
 . . .
 
-- **PR #18075** — SIMD dispatch for **unsigned** floor division
-- **PR #18766** — **signed** integer division via universal intrinsics
+- **PR [#18075](https://github.com/numpy/numpy/pull/18075)** — SIMD dispatch for **unsigned** floor division
+- **PR [#18766](https://github.com/numpy/numpy/pull/18766)** — **signed** integer division via universal intrinsics
 
 . . .
 
@@ -220,7 +220,7 @@ build. On my laptop (Apple Silicon) the same call returns:
 opt_func_info is the money slide: it names the exact ufunc + type-code loop the
 whole talk is about. Drop the signature filter to show every int dtype
 (bbb, hhh, iii, lll, qqq + unsigned). If you can, run it from a REAL terminal on
-the laptop live. Related: np.show_runtime() (my PR #21468) gives the CPU-level view.
+the laptop live. Related: np.show_runtime() (my PR [#21468](https://github.com/numpy/numpy/pull/21468)) gives the CPU-level view.
 :::
 
 ## The payoff {.smaller}
@@ -260,7 +260,7 @@ The rule: for each width, the **signed** loop must be listed **before** the
 
 . . .
 
-My SIMD change **(#18075)** accidentally emitted the **unsigned loops first**.
+My SIMD change **([#18075](https://github.com/numpy/numpy/pull/18075))** accidentally emitted the **unsigned loops first**.
 
 ## Fast code that's wrong isn't fast {.smaller}
 
@@ -281,13 +281,13 @@ vectorized, SIMD-accelerated, and incorrect. Shipped to *millions*. 😬
 
 . . .
 
-Caught **downstream by pandas** (pandas#40874), *not* by our own tests.
+Caught **downstream by pandas** ([pandas#40874](https://github.com/pandas-dev/pandas/issues/40874)), *not* by our own tests.
 
 > The part most performance talks skip: sometimes you're the one who broke it.
 
 ## The fix, and closing the gap {.smaller}
 
-**PR #18751** — one-line reorder: put signed back before unsigned in
+**PR [#18751](https://github.com/numpy/numpy/pull/18751)** — one-line reorder: put signed back before unsigned in
 `generate_umath.py`.
 
 . . .
@@ -298,8 +298,9 @@ so this class of bug can never silently return.
 . . .
 
 A separate edge-case saga from the same area — `INT_MIN // -1` **overflows**
-(the true answer doesn't fit in the type). What should NumPy do? → **#21507,
-#21727** report it gracefully instead of silent UB:
+(the true answer doesn't fit in the type). What should NumPy do? →
+**[#21507](https://github.com/numpy/numpy/pull/21507),
+[#21727](https://github.com/numpy/numpy/pull/21727)** report it gracefully instead of silent UB:
 
 ```{pyodide}
 import numpy as np
@@ -333,7 +334,13 @@ INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 **How NumPy Divides Integers Really Fast**
 
 - The PRs behind this talk:
-  `#17727 · #18075 · #18766 · #18751 · #19135 · #21507 · #21727`
+  [#17727](https://github.com/numpy/numpy/pull/17727) ·
+  [#18075](https://github.com/numpy/numpy/pull/18075) ·
+  [#18766](https://github.com/numpy/numpy/pull/18766) ·
+  [#18751](https://github.com/numpy/numpy/pull/18751) ·
+  [#19135](https://github.com/numpy/numpy/pull/19135) ·
+  [#21507](https://github.com/numpy/numpy/pull/21507) ·
+  [#21727](https://github.com/numpy/numpy/pull/21727)
 - GitHub: **@ganesh-k13**
 - Questions?
 
