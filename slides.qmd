@@ -23,7 +23,7 @@ filters:
   - live
 ---
 
-## Hi, I'm Ganesh 👋 {.smaller}
+## Hi, I'm Ganesh {.smaller}
 
 - Software engineer, open-source contributor to **NumPy** since 2020
 - I contribute to the NumPy internals: **SIMD integer division**, new UFuncs
@@ -35,7 +35,7 @@ Keep this short — 30 seconds. Land the hook: I work on the thing everyone
 imports but nobody looks inside.
 :::
 
-## The library everyone imports, nobody opens {background-color="#0b1021"}
+## Under every import numpy {background-color="#0b1021"}
 
 Pandas, PyTorch, scikit-learn, JAX, every dataframe and ML stack…
 
