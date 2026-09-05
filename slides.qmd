@@ -151,18 +151,19 @@ foreshadow the bug. Run the cell live so the -4 vs -3 lands.
 ## First speedup: before vs libdivide {.smaller}
 
 ::: {.r-stack}
-![](images/libdivide_vs_before.png){width="72%"}
+![](images/libdivide_vs_before.png){width="62%"}
 :::
 
 ::: {.fragment}
-No SIMD yet — just multiply-and-shift instead of a hardware divide. Already
-**~1.5–1.8×** on integer `floor_divide`.
+No SIMD yet — just multiply-and-shift instead of a hardware divide. **~50%**
+faster on integer `floor_divide` ([#17727](https://github.com/numpy/numpy/pull/17727)).
 :::
 
 ::: {.notes}
-Replace images/libdivide_vs_before.png with the real chart from PR #17727 if you
-have it. Numbers here are illustrative (~50% is the ballpark libdivide delivered).
-Point: this is the *scalar* win — SIMD comes next and stacks on top.
+~50% is the headline figure for #17727 (also what I cited at SciPy). The PR
+posted a benchmark image, not a per-dtype table, so this is a single honest
+number — not fabricated per-dtype bars. This is the *scalar* win; SIMD (next
+slide) stacks on top with real per-dtype numbers.
 :::
 
 # Part 3 — Going SIMD, portably {background-color="#0f3460"}
@@ -235,18 +236,20 @@ the laptop live. Related: np.show_runtime() (my PR [#21468](https://github.com/n
 ## The payoff {.smaller}
 
 ::: {.r-stack}
-![Benchmark: speedup from libdivide + SIMD across integer dtypes](images/benchmark.png){width="70%"}
+![](images/benchmark.png){width="66%"}
 :::
 
 ::: {.fragment}
-Big speedups on `int8`…`int64`, on both Intel/AMD and ARM — **from one
-codebase**.
+Narrower dtypes win most — more elements per SIMD register. **int8 ~33×**,
+int64 ~5× on AVX2 ([#18766](https://github.com/numpy/numpy/pull/18766)).
 :::
 
 ::: {.notes}
-Replace images/benchmark.png with the real chart from PR #17727 / #18075.
-If you don't have it rendered, screenshot the PR's benchmark image.
-Say the actual numbers out loud here.
+Real measured numbers from PR #18766 (before = libdivide, after = SIMD),
+AVX2 on an Intel Core i7-8550U. Same PR also reports SSE4.1 (~2–25×), SSE3,
+POWER9 VSX2, and AArch64 NEON (int8 ~10×, int64 ~1.1–1.3×) — smaller on the
+weaker ARM core but still one codebase. Numbers are before/after averaged over
+the 4 divisors reported per dtype.
 :::
 
 # Part 4 — The bug I shipped 😬 {background-color="#3a0ca3"}
