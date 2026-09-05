@@ -15,7 +15,7 @@ format:
     highlight-style: github
     code-line-numbers: true
     center-title-slide: true
-    footer: "import_ bengaluru · BangPypers"
+    footer: "import_bengaluru · BangPypers"
     logo: ""
     hash: true
 ---
@@ -23,11 +23,9 @@ format:
 ## Hi, I'm Ganesh 👋 {.smaller}
 
 - Software engineer, open-source contributor to **NumPy** since 2020
-- I work deep in the internals: **SIMD integer division**, new UFuncs
+- I contribute to the NumPy internals: **SIMD integer division**, new UFuncs
   (`bit_count`, `bitwise_count`), the **Meson** build migration, and the
   `spin` developer tooling
-- I like the unglamorous side of open source: benchmarks, regressions,
-  and the occasional 2 AM "why is CI red on ARM only?"
 
 ::: {.notes}
 Keep this short — 30 seconds. Land the hook: I work on the thing everyone
@@ -52,7 +50,7 @@ a // b   # integer floor division on an array
 
 . . .
 
-What actually happens here? It's weirder — and faster — than you'd think.
+What actually happens here? It's weirder - and faster - than you'd think.
 
 # Part 1 — Why is `a // b` slow? {background-color="#1a1a2e"}
 
@@ -96,7 +94,7 @@ q = (x * 0x2492_4925ULL) >> 34;   // magic constant + shift
 
 . . .
 
-This is the trick behind **`libdivide`** — and the foundation of everything
+This is the trick behind **`libdivide`** - and the foundation of everything
 that follows.
 
 # Part 2 — The multiply-and-shift trick {background-color="#16213e"}
@@ -118,7 +116,7 @@ for (i = 0; i < n; i++) {
 
 . . .
 
-**PR #17727** — added libdivide to floor division. First real speedup.
+**PR #17727** - added libdivide to floor division. First real speedup.
 
 . . .
 
