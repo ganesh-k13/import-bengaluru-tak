@@ -257,8 +257,8 @@ turns small negatives into huge positives:
 
 ```{pyodide}
 import numpy as np
-# This is *why* loop order matters — a signed value seen as unsigned:
-np.array([-6], dtype=np.int64).view(np.uint64)   # 18446744073709551610
+# This is *why* loop order matters — the same 8 bits, read two ways:
+np.array([-6], dtype=np.int8).view(np.uint8)   # -6  ->  250  (256 - 6)
 ```
 
 . . .
