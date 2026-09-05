@@ -89,17 +89,30 @@ gap between divide and everything else.
 . . .
 
 Dividing by 7? A compiler doesn't emit a `div`. It multiplies by a cleverly
-chosen "magic number" and shifts:
+chosen "magic number" and shifts — try it live:
 
-```c
-// x / 7  becomes roughly:
-q = (x * 0x2492_4925ULL) >> 34;   // magic constant + shift
+```{pyodide}
+import numpy as np
+d, SHIFT = 7, 32
+magic = (1 << SHIFT) // d + 1        # precompute the "magic number" once
+x = np.arange(40, dtype=np.uint64)
+
+fast = (x * np.uint64(magic)) >> np.uint64(SHIFT)   # a multiply + a shift
+slow = x // d                                       # a real hardware divide
+
+np.array_equal(fast, slow), magic   # same answer, no `div` instruction
 ```
 
 . . .
 
 This is the trick behind **`libdivide`** - and the foundation of everything
 that follows.
+
+::: {.notes}
+Point out: magic is computed ONCE, then reused for every element — that's the
+whole game. The exact constant/shift depends on the divisor and bit width;
+libdivide picks correct ones for the full integer range (this demo is bounded).
+:::
 
 # Part 2 — The multiply-and-shift trick {background-color="#16213e"}
 
