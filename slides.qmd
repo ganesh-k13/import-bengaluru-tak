@@ -350,7 +350,8 @@ maintainer's own words — let it land.
   [#21727](https://github.com/numpy/numpy/pull/21727) ·
   [#32422](https://github.com/numpy/numpy/pull/32422) ·
   [#32498](https://github.com/numpy/numpy/pull/32498)
-- GitHub: **@ganesh-k13**
+- GitHub: **[@ganesh-k13](https://github.com/ganesh-k13)**
+- LinkedIn: **[ganesh-kathiresan](https://www.linkedin.com/in/ganesh-kathiresan/)**
 - Questions?
 
 ::: {.notes}
