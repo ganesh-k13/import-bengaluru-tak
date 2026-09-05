@@ -18,6 +18,7 @@ format:
     footer: "import_bengaluru · BangPypers"
     logo: ""
     hash: true
+engine: markdown
 filters:
   - live
 ---
@@ -335,7 +336,7 @@ maintainer's own words — let it land.
 4. The code under your `import` is **approachable**. You can contribute to it.
 :::
 
-## Thank you 🙏 {background-color="#0b1021"}
+## Thank you {background-color="#0b1021"}
 
 **How NumPy Divides Integers Really Fast**
 
