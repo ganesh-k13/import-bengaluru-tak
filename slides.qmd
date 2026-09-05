@@ -148,6 +148,23 @@ pay off. Floor-vs-truncate is exactly the kind of detail that bites you later �
 foreshadow the bug. Run the cell live so the -4 vs -3 lands.
 :::
 
+## First speedup: before vs libdivide {.smaller}
+
+::: {.r-stack}
+![](images/libdivide_vs_before.png){width="72%"}
+:::
+
+::: {.fragment}
+No SIMD yet — just multiply-and-shift instead of a hardware divide. Already
+**~1.5–1.8×** on integer `floor_divide`.
+:::
+
+::: {.notes}
+Replace images/libdivide_vs_before.png with the real chart from PR #17727 if you
+have it. Numbers here are illustrative (~50% is the ballpark libdivide delivered).
+Point: this is the *scalar* win — SIMD comes next and stacks on top.
+:::
+
 # Part 3 — Going SIMD, portably {background-color="#0f3460"}
 
 ## One divide at a time is still one at a time {.smaller}
