@@ -322,9 +322,9 @@ INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 
 ## Full circle: the libdivide odyssey {.smaller}
 
-- **2021** — libdivide arrives ([#17727](https://github.com/numpy/numpy/pull/17727))
-- **2022** — `floor_divide` → SIMD ([#18766](https://github.com/numpy/numpy/pull/18766)); `timedelta` stays on libdivide
-- **2026** — last path → SIMD, **~5–6× faster** ([#32422](https://github.com/numpy/numpy/pull/32422))
+- **2020** — libdivide arrives ([#17727](https://github.com/numpy/numpy/pull/17727))
+- **2021** — `floor_divide` → SIMD ([#18075](https://github.com/numpy/numpy/pull/18075), [#18766](https://github.com/numpy/numpy/pull/18766)); `timedelta` left on libdivide
+- **2026** — last path → SIMD: `timedelta` `floor_divide` **~5–6× faster** ([#32422](https://github.com/numpy/numpy/pull/32422))
 - **2026** — libdivide **deleted**: −2,112 lines ([#32498](https://github.com/numpy/numpy/pull/32498))
 
 . . .
@@ -336,10 +336,14 @@ INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
 Six years, start to finish. **That's open source.** 🥳
 
 ::: {.notes}
-One path (timedelta) stayed stuck on libdivide until 2026. Punchline: I finished
-#32422 by feeding my own 3-year-old abandoned commit to Claude — the journey
-began before the AI boom and closed with AI help. "libdivide odyssey" is the
-maintainer's own words — let it land.
+Years verified from merge dates: #17727 (2020), #18075 (2020) + #18766 (2021),
+#32422 & #32498 (Sep 2026). Timedelta stayed on libdivide until 2026.
+#32422 benchmark (real, measured on an M3 / NEON): timedelta floor_divide
+ratios 0.16–0.21 → ~4.8–6.3× faster (author's headline: ~5–6×). Caveat: the
+truncated `divide` path got ~1.1–1.4× SLOWER on that run, and AVX wasn't
+benchmarked at PR time — so say "floor_divide, on M3" if pressed.
+Punchline: I finished #32422 by feeding my own 3-year-old abandoned commit to
+Claude. "libdivide odyssey" is the maintainer's own words — let it land.
 :::
 
 # Part 5 — What I'd want you to take away {background-color="#1a1a2e"}
