@@ -182,33 +182,32 @@ Signed is the hard one: sign handling + floor rounding, all vectorized.
 
 ## Which instruction runs *here*? {.smaller}
 
-NumPy tells you what it compiled and what it picked at runtime for **your** CPU:
+NumPy will tell you, **per ufunc and per dtype**, which SIMD variant it built
+and which it picked at runtime — let's ask about `floor_divide` itself:
 
 ```{pyodide}
 import numpy as np
-from numpy._core._multiarray_umath import (
-    __cpu_baseline__ as baseline,   # always-on, compiled in
-    __cpu_dispatch__ as dispatch,   # candidates chosen at runtime
-    __cpu_features__ as features,   # what THIS cpu actually has
-)
-baseline, [f for f in dispatch if features[f]]
+# 'l' = the int64 loop ('lll' = int64 // int64 -> int64)
+np.lib.introspect.opt_func_info(func_name="floor_divide", signature="l")
 ```
 
 ::: {.callout-note}
-Live here it runs in a **WASM sandbox** (Pyodide) — so you'll see the browser's
-feature set, not real silicon. On my laptop (Apple Silicon), the same call says:
+Live here it runs in a **WASM sandbox** (Pyodide), so it reports the browser's
+build. On my laptop (Apple Silicon) the same call returns:
 :::
 
 ```python
-# baseline : ['NEON', 'NEON_FP16', 'NEON_VFPV4', 'ASIMD']
-# dispatch chosen at runtime → ['ASIMDHP', 'ASIMDDP']
-np.show_runtime()   # full report, incl. simd_extensions found / not_found
+{'floor_divide': {'lll': {'available': 'baseline(NEON NEON_FP16 ... ASIMD)',
+                          'current':   'baseline(NEON NEON_FP16 ... ASIMD)'}}}
+# On an x86 box you'd instead see 'available': 'SSE41 ... AVX2 AVX512...'
+# and 'current' set to whichever your CPU supports.
 ```
 
 ::: {.notes}
-Run np.show_runtime() from a REAL terminal on the presenting laptop live if
-you can — that's the money shot. show_runtime() is itself my PR #21468.
-On an x86 box this would show SSE/AVX2/AVX-512 instead of NEON/ASIMD.
+opt_func_info is the money slide: it names the exact ufunc + type-code loop the
+whole talk is about. Drop the signature filter to show every int dtype
+(bbb, hhh, iii, lll, qqq + unsigned). If you can, run it from a REAL terminal on
+the laptop live. Related: np.show_runtime() (my PR #21468) gives the CPU-level view.
 :::
 
 ## The payoff {.smaller}
