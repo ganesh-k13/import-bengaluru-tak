@@ -28,14 +28,14 @@ filters:
 - Software engineer, open-source contributor to **NumPy** since 2020
 - I contribute to the NumPy internals: **SIMD integer division**, new UFuncs
   (`bit_count`, `bitwise_count`), the **Meson** build migration, and the
-  `spin` developer tooling
+  `spin` developer tooling to name a few.
 
 ::: {.notes}
 Keep this short — 30 seconds. Land the hook: I work on the thing everyone
 imports but nobody looks inside.
 :::
 
-## Under every import numpy {background-color="#0b1021"}
+## Under every ``import numpy`` {background-color="#0b1021"}
 
 Pandas, PyTorch, scikit-learn, JAX, every dataframe and ML stack…
 
@@ -86,19 +86,19 @@ divide once — the cost is multiplied across the array.
 
 . . .
 
-Dividing by 7? A compiler doesn't emit a `div`. It multiplies by a cleverly
+Dividing by 2? A compiler doesn't emit a `div`. It multiplies by a cleverly
 chosen "magic number" and shifts — try it live:
 
 ```{pyodide}
 import numpy as np
-d, SHIFT = 7, 32
+x = np.arange(10, dtype=np.uint64)   # Dividing 0 to 10 by 2
+d, SHIFT = 2, 32                     # d is the divisor
 magic = (1 << SHIFT) // d + 1        # precompute the "magic number" once
-x = np.arange(40, dtype=np.uint64)
 
 fast = (x * np.uint64(magic)) >> np.uint64(SHIFT)   # a multiply + a shift
 slow = x // d                                       # a real hardware divide
 
-np.array_equal(fast, slow), magic   # same answer, no `div` instruction
+fast, np.array_equal(fast, slow), magic   # same answer, no `div` instruction
 ```
 
 . . .
@@ -293,8 +293,6 @@ np.array([-6], dtype=np.int8).view(np.uint8)   # -6 -> 250
 Shipped to *millions*. 😬 Caught by **pandas**
 ([pandas#40874](https://github.com/pandas-dev/pandas/issues/40874)), not our tests.
 
-> Sometimes you're the one who broke it.
-
 ## The fix, and closing the gap {.smaller}
 
 **[#18751](https://github.com/numpy/numpy/pull/18751)** — a one-line reorder. The *real* fix: a **test**
@@ -306,16 +304,19 @@ Related edge case — `INT_MIN // -1` **overflows** (won't fit the type).
 **[#21507](https://github.com/numpy/numpy/pull/21507) ·
 [#21727](https://github.com/numpy/numpy/pull/21727)** warn instead of silent UB:
 
-```{pyodide}
-import numpy as np
-imin = np.iinfo(np.int64).min
-np.array([imin], dtype=np.int64) // np.int64(-1)   # warns: overflow
+```python
+>>> imin = np.iinfo(np.int64).min
+>>> np.array([imin], dtype=np.int64) // np.int64(-1)
+RuntimeWarning: overflow encountered in floor_divide
+array([-9223372036854775808])        # wraps to INT_MIN, but you're warned
 ```
 
 ::: {.notes}
 The reorder was in generate_umath.py. The .view() cell earlier showed the hazard
 of signed->unsigned reinterpretation (illustrative, not the literal buggy output).
-INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow.
+INT_MIN/-1: abs(INT_MIN) doesn't fit in the type — the classic overflow. Kept this
+static because Pyodide's NumPy doesn't emit the RuntimeWarning; run it from a real
+terminal live if you can.
 :::
 
 # Epilogue — six years later {background-color="#0b1021"}
@@ -360,9 +361,7 @@ Claude. "libdivide odyssey" is the maintainer's own words — let it land.
 4. The code under your `import` is **approachable**. You can contribute to it.
 :::
 
-## Thank you {background-color="#0b1021"}
-
-**How NumPy Divides Integers Really Fast**
+## Thank you! {background-color="#0b1021"}
 
 - The PRs behind this talk:
   [#17727](https://github.com/numpy/numpy/pull/17727) ·
